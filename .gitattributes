@@ -1,0 +1,5 @@
+# Сохраняем LF для скриптов (чтобы работали в Linux-контейнерах)
+*.sh		text eol=lf
+*.js		text eol=lf
+*.ts		text eol=lf
+Dockerfile	text eol=lf

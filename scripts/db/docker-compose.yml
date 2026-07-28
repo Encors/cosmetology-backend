@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # ОСНОВНАЯ БАЗА ДАННЫХ (MongoDB)
+  # ============================================
+  mongodb:
+    image: mongo:latest
+    container_name: cosmetology-mongodb
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
+    volumes:
+      - mongodb-data:/data/db
+      - ../seed:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MONGODB EXPRESS (ВЕБ-ИНТЕРФЕЙС ДЛЯ БАЗЫ) 
+  # Альтернатива MongoDB Compass в браузере
+  # ============================================
+  mongo-express:
+    image: mongo-express:latest
+    container_name: cosmetology-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_OPTIONS_EDITORTHEME=dark
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - tools
+      - all
+
+  # ============================================
+  # ДАМП (резервное копирование и восстановление)
+  # Запускается только с профилем dump
+  # ============================================
+  dump:
+    container_name: cosmetology-dump
+    build:
+      context: ./dump
+      dockerfile: Dockerfile
+    profiles:
+      - dump
+      - all
+    environment:
+      # Источник
+      - SOURCE_HOST=${DUMP_SOURCE_HOST}
+      - SOURCE_PORT=${DUMP_SOURCE_PORT}
+      - SOURCE_USER=${DUMP_SOURCE_USER}
+      - SOURCE_PASS=${DUMP_SOURCE_PASS}
+      - SOURCE_DB=${DUMP_SOURCE_DB}
+      # Получатель
+      - DESTINATION_HOST=${DUMP_DESTINATION_HOST}
+      - DESTINATION_PORT=${DUMP_DESTINATION_PORT}
+      - DESTINATION_USER=${DUMP_DESTINATION_USER}
+      - DESTINATION_PASS=${DUMP_DESTINATION_PASS}
+      - DESTINATION_DB=${DUMP_DESTINATION_DB}
+      # Настройки
+      - DUMP_DUMP_FROM_SOURCE=${DUMP_DUMP_FROM_SOURCE}
+      - LOAD_TO_DESTINATION=${DUMP_LOAD_TO_DESTINATION}
+      - VERBOSE=${DUMP_VERBOSE}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    # Если нужно сохранить дамп в файл на компьютере:
+    # volumes:
+    #   - ./backups:/backups
+
+# ============================================
+# ПЕРСИСТЕНТНЫЕ ТОМА (данные сохраняются между запусками)
+# ============================================
+volumes:
+  mongodb-data:
+    name: cosmetology-mongodb-data
