@@ -1,7 +1,10 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { connectDatabase } from './config/database';
+import authRouter from './routes/auth';
 
+// Загружаем переменные окружения из файла .env
 dotenv.config();
 
 const app: Application = express();
@@ -24,9 +27,8 @@ app.get('/health', (req: Request, res: Response) => {
     });
 });
 
-// TODO: Подключим роуты позже
-// app.use('/api/auth', authRouter);
-// app.use('/api/services', serviceRouter);
+// Маршруты авторизации: /api/auth/register и /api/auth/login
+app.use('/api/auth', authRouter);
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: any) => {
@@ -42,11 +44,21 @@ app.use((req: Request, res: Response) => {
     res.status(404).json({ message: 'Маршрут не найден' });
 });
 
-// Запуск сервера
+// Запуск сервера (только если файл запущен напрямую, а не импортирован в тестах)
 if (require.main === module) {
-    app.listen(PORT, () => {
-        console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-        console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    const startServer = async (): Promise<void> => {
+        // Сначала подключаемся к MongoDB, затем поднимаем HTTP-сервер
+        await connectDatabase();
+
+        app.listen(PORT, () => {
+            console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
+            console.log(`📊 Health check: http://localhost:${PORT}/health`);
+        });
+    };
+
+    startServer().catch((error) => {
+        console.error('Не удалось запустить сервер:', error);
+        process.exit(1);
     });
 }
 
